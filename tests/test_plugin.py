@@ -113,8 +113,9 @@ async def test_create_modify_delete_and_persist(tmp_path: Path) -> None:
     assert prompt.startswith("短期记忆(短期记忆为全局显示")
     assert (
         f"{record_id}测试昵称（123456789）:在群里约大家周六打游戏"
-        "（删除条件：大家不再提周六游戏时删除）"
+        "；删除条件：大家不再提周六游戏时删除"
     ) in prompt
+    assert "这个要你自行判断或者询问，也可以不写" in prompt
 
     modified = await plugin.modify_short_term_memory(
         id=record_id,

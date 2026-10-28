@@ -91,7 +91,7 @@ async def main() -> None:
 
         parsed = deserialize_prompt_items(raw_items, item_schema_version=1, original_items=[])
         planner_line = parsed[0].parts[0].text.splitlines()[1]
-        assert "（删除条件：验证完成后删除）" in planner_line
+        assert "；删除条件：验证完成后删除" in planner_line
         print(
             "PLANNER_ITEM",
             raw_items[0]["item_type"],
@@ -102,7 +102,7 @@ async def main() -> None:
         replyer_result = await plugin.inject_replyer(extra_prompt="")
         assert replyer_result is not None
         replyer_prompt = replyer_result["modified_kwargs"]["extra_prompt"]
-        assert "（删除条件：验证完成后删除）" in replyer_prompt
+        assert "；删除条件：验证完成后删除" in replyer_prompt
         print("REPLYER_PROMPT", replyer_prompt.splitlines()[1])
 
         modified = await plugin.modify_short_term_memory(

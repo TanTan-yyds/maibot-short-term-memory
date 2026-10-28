@@ -43,7 +43,8 @@ _MAX_EVENT_CHARS = 500
 _MAX_DELETE_CONDITION_CHARS = 200
 _PROMPT_HEADER = (
     "短期记忆(短期记忆为全局显示，必须要有消息进入才会触发，"
-    "在一些情况下建议使用定时任务之类的):"
+    "在一些情况下建议使用定时任务之类的，在一般情况下删除条件一般都是发生一次就算结束，"
+    "这个要你自行判断或者询问，也可以不写):"
 )
 
 
@@ -208,7 +209,8 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         detailed_description=(
             "创建短期记忆。必须提供 qq_number（QQ号）和 event（对事情的描述）。"
             "qq_name 可选；未提供时会尝试从人物资料中自动解析，解析失败则记为“未知QQ用户”。"
-            "delete_condition 可选，用于描述满足什么条件时应删除这条记忆；不填表示没有删除条件。"
+            "delete_condition 可选，用于描述满足什么条件时应删除这条记忆；"
+            "通常发生一次就算结束，需要你自行判断或询问用户，也可以不写。"
             "编号由插件随机生成 4 位小写字母/数字并自动查重，调用者不要自行传编号。"
             "返回 content 与生成的 id；后续修改、删除都使用该 id。"
         ),
@@ -307,8 +309,8 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         detailed_description=(
             "修改短期记忆。必须提供 id（4 位编号）、qq_number（原 QQ 或修改后的 QQ 均可）"
             "以及 event（修改后的事情描述）。qq_name 可选；QQ 号未变化且不传 qq_name 时保留原名，"
-            "QQ 号变化时自动尝试解析新名字。delete_condition 可选；不传时保留原值，"
-            "传空字符串可清除删除条件。只修改传入的字段。"
+            "QQ 号变化时自动尝试解析新名字。delete_condition 可选，通常发生一次就算结束，"
+            "需要你自行判断或询问用户；不传时保留原值，传空字符串可清除删除条件。只修改传入的字段。"
         ),
         parameters=[
             ToolParameterInfo(
@@ -476,7 +478,7 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
     def _format_record_fields(record: MemoryRecord) -> str:
         text = f"{record.qq_name}（{record.qq_number}）:{record.event}"
         if record.delete_condition:
-            text += f"（删除条件：{record.delete_condition}）"
+            text += f"；删除条件：{record.delete_condition}"
         return text
 
     @staticmethod
