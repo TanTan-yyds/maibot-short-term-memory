@@ -165,13 +165,6 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 items.append(self._build_system_item(prompt))
                 kwargs["items"] = items
                 return {"action": "continue", "modified_kwargs": kwargs}
-
-            # 兼容旧 Host：旧版 Planner Hook 使用 messages。
-            messages = kwargs.get("messages")
-            if isinstance(messages, list):
-                messages.append({"role": "system", "content": prompt})
-                kwargs["messages"] = messages
-                return {"action": "continue", "modified_kwargs": kwargs}
             return None
         except Exception as exc:
             self.ctx.logger.error("[短期记忆] Planner 注入失败: %s", exc, exc_info=True)
@@ -344,7 +337,7 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 required=False,
             ),
         ],
-        core_tool=True,
+        core_tool=False,
     )
     async def modify_short_term_memory(
         self,
@@ -432,7 +425,7 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 required=True,
             ),
         ],
-        core_tool=True,
+        core_tool=False,
     )
     async def delete_short_term_memory(self, id: str = "", **kwargs: Any) -> dict[str, Any]:
         try:

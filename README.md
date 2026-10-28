@@ -72,7 +72,7 @@ Planner 通过追加一条系统 Context Item 注入；Replyer 通过 `extra_pro
 - `modify_short_term_memory`：`id`、`qq_number`、`event` 必填；`qq_name`、`delete_condition` 可选。不传 `delete_condition` 时保留原值，传空字符串可清除。
 - `delete_short_term_memory`：`id` 必填。
 
-三个工具都设置为 `core_tool=True`，LLM 每轮可直接看到。
+`add_short_term_memory` 设置为 `core_tool=True`，LLM 每轮可直接看到；`modify_short_term_memory` 和 `delete_short_term_memory` 默认进入 deferred 池，需要时由模型通过 `tool_search` 发现，以减少每轮工具定义占用。
 
 ## 数据
 
