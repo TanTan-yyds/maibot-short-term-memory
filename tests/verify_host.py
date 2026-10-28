@@ -79,6 +79,7 @@ async def main() -> None:
         created = await plugin.add_short_term_memory(
             qq_number="123456789",
             event="真实 Host 验证事项",
+            delete_condition="验证完成后删除",
         )
         print("CREATE", json.dumps(created, ensure_ascii=False))
         record_id = created["id"]
@@ -89,16 +90,19 @@ async def main() -> None:
         from src.plugin_runtime.hook_payloads import deserialize_prompt_items
 
         parsed = deserialize_prompt_items(raw_items, item_schema_version=1, original_items=[])
+        planner_line = parsed[0].parts[0].text.splitlines()[1]
+        assert "（删除条件：验证完成后删除）" in planner_line
         print(
             "PLANNER_ITEM",
             raw_items[0]["item_type"],
             parsed[0].role.value,
-            parsed[0].parts[0].text.splitlines()[1],
+            planner_line,
         )
 
         replyer_result = await plugin.inject_replyer(extra_prompt="")
         assert replyer_result is not None
         replyer_prompt = replyer_result["modified_kwargs"]["extra_prompt"]
+        assert "（删除条件：验证完成后删除）" in replyer_prompt
         print("REPLYER_PROMPT", replyer_prompt.splitlines()[1])
 
         modified = await plugin.modify_short_term_memory(
@@ -106,8 +110,20 @@ async def main() -> None:
             qq_number="987654321",
             event="修改后事项",
             qq_name="新验证昵称",
+            delete_condition="验证结束后删除",
         )
         print("MODIFY", modified["success"], json.dumps(modified["memory"], ensure_ascii=False))
+
+        cleared = await plugin.modify_short_term_memory(
+            id=record_id,
+            qq_number="987654321",
+            event="修改后事项",
+            qq_name="新验证昵称",
+            delete_condition="",
+        )
+        assert cleared["success"] is True
+        assert cleared["memory"]["delete_condition"] == ""
+        print("MODIFY_CLEAR", json.dumps(cleared["memory"], ensure_ascii=False))
 
         deleted = await plugin.delete_short_term_memory(id=record_id)
         print("DELETE", deleted["success"], len(plugin._memories))

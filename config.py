@@ -5,7 +5,7 @@ from __future__ import annotations
 from maibot_sdk import PluginConfigBase
 from pydantic import Field
 
-PLUGIN_VERSION = "1.0.1"
+PLUGIN_VERSION = "1.0.2"
 PLUGIN_CONFIG_VERSION = "1.0.0"
 
 

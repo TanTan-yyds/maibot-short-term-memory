@@ -9,6 +9,7 @@
 - QQ 号
 - QQ 名/群昵称
 - 事情描述
+- 删除条件（可选）
 
 记忆会同时注入 Maisaka 的 Planner（规划组件）和 Replyer（回复组件）。注入提示词中的括号说明是给 AI 的使用约束：没有会话、准备使用定时任务等场景时，不要把这些短期记忆当作当前会话事实。
 
@@ -58,15 +59,17 @@ config_version = "1.0.0"
 ```text
 短期记忆(短期记忆为全局显示，必须要有消息进入才会触发，在一些情况下建议使用定时任务之类的):
 abcd昵称（123456789）:事情描述
-efgh另一位（987654321）:另一件事情
+efgh另一位（987654321）:另一件事情（删除条件：当事人表示事情已结束时删除）
 ```
+
+删除条件是可选的自然语言描述，用于提示 LLM 何时应调用删除工具。插件不会自动解释或执行删除条件。
 
 Planner 通过追加一条系统 Context Item 注入；Replyer 通过 `extra_prompt` 注入。若其他插件也使用 `extra_prompt`，本插件会追加而不是覆盖。
 
 ## Tools
 
-- `add_short_term_memory`：`qq_number`、`event` 必填；`qq_name` 可选，缺省时尝试从人物资料解析。编号自动生成并返回。
-- `modify_short_term_memory`：`id`、`qq_number`、`event` 必填；`qq_number` 可传原 QQ 或修改后的 QQ。`qq_name` 可选。
+- `add_short_term_memory`：`qq_number`、`event` 必填；`qq_name`、`delete_condition` 可选。编号自动生成并返回。
+- `modify_short_term_memory`：`id`、`qq_number`、`event` 必填；`qq_name`、`delete_condition` 可选。不传 `delete_condition` 时保留原值，传空字符串可清除。
 - `delete_short_term_memory`：`id` 必填。
 
 三个工具都设置为 `core_tool=True`，LLM 每轮可直接看到。

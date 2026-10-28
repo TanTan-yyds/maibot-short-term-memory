@@ -101,15 +101,20 @@ async def test_create_modify_delete_and_persist(tmp_path: Path) -> None:
     created = await plugin.add_short_term_memory(
         qq_number="123456789",
         event="在群里约大家周六打游戏",
+        delete_condition="大家不再提周六游戏时删除",
     )
     assert created["success"] is True
     record_id = created["id"]
     assert re.fullmatch(r"[0-9a-z]{4}", record_id)
     assert created["memory"]["qq_name"] == "测试昵称"
+    assert created["memory"]["delete_condition"] == "大家不再提周六游戏时删除"
 
     prompt = plugin._build_injection_text()
     assert prompt.startswith("短期记忆(短期记忆为全局显示")
-    assert f"{record_id}测试昵称（123456789）:在群里约大家周六打游戏" in prompt
+    assert (
+        f"{record_id}测试昵称（123456789）:在群里约大家周六打游戏"
+        "（删除条件：大家不再提周六游戏时删除）"
+    ) in prompt
 
     modified = await plugin.modify_short_term_memory(
         id=record_id,
@@ -121,17 +126,69 @@ async def test_create_modify_delete_and_persist(tmp_path: Path) -> None:
     assert modified["memory"]["qq_number"] == "987654321"
     assert modified["memory"]["qq_name"] == "新昵称"
     assert modified["memory"]["event"] == "改约周日打游戏"
+    assert modified["memory"]["delete_condition"] == "大家不再提周六游戏时删除"
+
+    modified_with_condition = await plugin.modify_short_term_memory(
+        id=record_id,
+        qq_number="987654321",
+        event="改约周日打游戏",
+        delete_condition="周日结束后删除",
+    )
+    assert modified_with_condition["success"] is True
+    assert modified_with_condition["memory"]["delete_condition"] == "周日结束后删除"
 
     await plugin.on_unload()
 
     reloaded = await make_plugin(tmp_path)
     assert record_id in reloaded._memories
     assert reloaded._memories[record_id].qq_name == "新昵称"
+    assert reloaded._memories[record_id].delete_condition == "周日结束后删除"
 
     deleted = await reloaded.delete_short_term_memory(id=record_id)
     assert deleted["success"] is True
     assert reloaded._build_injection_text() == ""
     await reloaded.on_unload()
+
+
+@pytest.mark.asyncio
+async def test_delete_condition_is_optional_and_clearable(tmp_path: Path) -> None:
+    plugin = await make_plugin(tmp_path)
+    created = await plugin.add_short_term_memory(
+        qq_number="123456789",
+        qq_name="小明",
+        event="借了一本书",
+    )
+    assert created["success"] is True
+    assert created["memory"]["delete_condition"] == ""
+    record_id = created["id"]
+
+    modified = await plugin.modify_short_term_memory(
+        id=record_id,
+        qq_number="123456789",
+        event="借了一本书",
+        delete_condition="书归还后删除",
+    )
+    assert modified["success"] is True
+    assert modified["memory"]["delete_condition"] == "书归还后删除"
+
+    cleared = await plugin.modify_short_term_memory(
+        id=record_id,
+        qq_number="123456789",
+        event="借了一本书",
+        delete_condition="",
+    )
+    assert cleared["success"] is True
+    assert cleared["memory"]["delete_condition"] == ""
+
+    too_long = await plugin.modify_short_term_memory(
+        id=record_id,
+        qq_number="123456789",
+        event="借了一本书",
+        delete_condition="删" * 201,
+    )
+    assert too_long["success"] is False
+
+    await plugin.on_unload()
 
 
 @pytest.mark.asyncio

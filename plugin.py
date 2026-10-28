@@ -40,10 +40,16 @@ _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 
 _MAX_QQ_NAME_CHARS = 64
 _MAX_EVENT_CHARS = 500
+_MAX_DELETE_CONDITION_CHARS = 200
 _PROMPT_HEADER = (
     "短期记忆(短期记忆为全局显示，必须要有消息进入才会触发，"
     "在一些情况下建议使用定时任务之类的):"
 )
+
+
+def _clean_text(value: Any) -> str:
+    normalized = _CONTROL_RE.sub(" ", str(value or ""))
+    return " ".join(normalized.split()).strip()
 
 
 @dataclass(slots=True)
@@ -56,6 +62,7 @@ class MemoryRecord:
     event: str
     created_at: str
     updated_at: str
+    delete_condition: str = ""
 
     def to_dict(self) -> dict[str, str]:
         return asdict(self)
@@ -70,6 +77,9 @@ class MemoryRecord:
         event = str(data.get("event") or "").strip()
         created_at = str(data.get("created_at") or "").strip()
         updated_at = str(data.get("updated_at") or created_at).strip()
+        delete_condition = _clean_text(data.get("delete_condition"))[
+            :_MAX_DELETE_CONDITION_CHARS
+        ]
         if not _ID_RE.fullmatch(record_id) or not _QQ_RE.fullmatch(qq_number):
             return None
         if not qq_name or not event or not updated_at:
@@ -81,6 +91,7 @@ class MemoryRecord:
             event=event,
             created_at=created_at or updated_at,
             updated_at=updated_at,
+            delete_condition=delete_condition,
         )
 
 
@@ -197,6 +208,7 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         detailed_description=(
             "创建短期记忆。必须提供 qq_number（QQ号）和 event（对事情的描述）。"
             "qq_name 可选；未提供时会尝试从人物资料中自动解析，解析失败则记为“未知QQ用户”。"
+            "delete_condition 可选，用于描述满足什么条件时应删除这条记忆；不填表示没有删除条件。"
             "编号由插件随机生成 4 位小写字母/数字并自动查重，调用者不要自行传编号。"
             "返回 content 与生成的 id；后续修改、删除都使用该 id。"
         ),
@@ -219,6 +231,12 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 description="QQ 名或群昵称（可选；不填时自动查询）",
                 required=False,
             ),
+            ToolParameterInfo(
+                name="delete_condition",
+                param_type=ToolParamType.STRING,
+                description="可选的删除条件，例如“当事人明确表示事情已结束时删除”",
+                required=False,
+            ),
         ],
         core_tool=True,
     )
@@ -227,6 +245,7 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         qq_number: str = "",
         event: str = "",
         qq_name: str = "",
+        delete_condition: str = "",
         **kwargs: Any,
     ) -> dict[str, Any]:
         try:
@@ -234,10 +253,15 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 return self._fail("短期记忆工具已关闭")
             normalized_qq = self._normalize_qq(qq_number)
             normalized_event = self._normalize_event(event)
+            normalized_condition = self._normalize_delete_condition(delete_condition)
             if not normalized_qq:
                 return self._fail("qq_number 必须是 5-15 位纯数字 QQ 号")
             if not normalized_event:
                 return self._fail(f"event 不能为空且不能超过 {_MAX_EVENT_CHARS} 个字符")
+            if len(normalized_condition) > _MAX_DELETE_CONDITION_CHARS:
+                return self._fail(
+                    f"delete_condition 不能超过 {_MAX_DELETE_CONDITION_CHARS} 个字符"
+                )
 
             normalized_name = self._normalize_name(qq_name)
             if not normalized_name:
@@ -258,14 +282,12 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                     event=normalized_event,
                     created_at=now,
                     updated_at=now,
+                    delete_condition=normalized_condition,
                 )
                 self._memories[record_id] = record
                 self._save_locked()
 
-            content = (
-                f"已创建短期记忆 {record.id}："
-                f"{record.qq_name}（{record.qq_number}）:{record.event}"
-            )
+            content = f"已创建短期记忆 {record.id}：{self._format_record_fields(record)}"
             return {
                 "success": True,
                 "content": content,
@@ -285,7 +307,8 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         detailed_description=(
             "修改短期记忆。必须提供 id（4 位编号）、qq_number（原 QQ 或修改后的 QQ 均可）"
             "以及 event（修改后的事情描述）。qq_name 可选；QQ 号未变化且不传 qq_name 时保留原名，"
-            "QQ 号变化时自动尝试解析新名字。只修改传入的字段。"
+            "QQ 号变化时自动尝试解析新名字。delete_condition 可选；不传时保留原值，"
+            "传空字符串可清除删除条件。只修改传入的字段。"
         ),
         parameters=[
             ToolParameterInfo(
@@ -312,6 +335,12 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 description="修改后的 QQ 名或群昵称（可选）",
                 required=False,
             ),
+            ToolParameterInfo(
+                name="delete_condition",
+                param_type=ToolParamType.STRING,
+                description="修改后的删除条件（可选；不传保留原值，传空字符串清除）",
+                required=False,
+            ),
         ],
         core_tool=True,
     )
@@ -321,6 +350,7 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         qq_number: str = "",
         event: str = "",
         qq_name: str = "",
+        delete_condition: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         try:
@@ -329,12 +359,22 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
             record_id = self._normalize_id(id)
             normalized_qq = self._normalize_qq(qq_number)
             normalized_event = self._normalize_event(event)
+            normalized_condition: str | None = None
+            if delete_condition is not None:
+                normalized_condition = self._normalize_delete_condition(delete_condition)
             if not record_id:
                 return self._fail("id 必须是 4 位小写字母/数字")
             if not normalized_qq:
                 return self._fail("qq_number 必须是 5-15 位纯数字 QQ 号")
             if not normalized_event:
                 return self._fail(f"event 不能为空且不能超过 {_MAX_EVENT_CHARS} 个字符")
+            if (
+                normalized_condition is not None
+                and len(normalized_condition) > _MAX_DELETE_CONDITION_CHARS
+            ):
+                return self._fail(
+                    f"delete_condition 不能超过 {_MAX_DELETE_CONDITION_CHARS} 个字符"
+                )
 
             async with self._lock:
                 current = self._memories.get(record_id)
@@ -357,15 +397,14 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 record.qq_number = normalized_qq
                 record.qq_name = normalized_name
                 record.event = normalized_event
+                if normalized_condition is not None:
+                    record.delete_condition = normalized_condition
                 record.updated_at = self._now_iso()
                 self._save_locked()
                 updated = MemoryRecord.from_dict(record.to_dict())
 
             assert updated is not None
-            content = (
-                f"已修改短期记忆 {updated.id}："
-                f"{updated.qq_name}（{updated.qq_number}）:{updated.event}"
-            )
+            content = f"已修改短期记忆 {updated.id}：{self._format_record_fields(updated)}"
             return {
                 "success": True,
                 "content": content,
@@ -405,10 +444,7 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
                 if record is None:
                     return self._fail(f"未找到编号为 {record_id} 的短期记忆")
                 self._save_locked()
-            content = (
-                f"已删除短期记忆 {record.id}："
-                f"{record.qq_name}（{record.qq_number}）:{record.event}"
-            )
+            content = f"已删除短期记忆 {record.id}：{self._format_record_fields(record)}"
             return {
                 "success": True,
                 "content": content,
@@ -433,10 +469,15 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         )
         lines = [_PROMPT_HEADER]
         for record in records:
-            lines.append(
-                f"{record.id}{record.qq_name}（{record.qq_number}）:{record.event}"
-            )
+            lines.append(f"{record.id}{self._format_record_fields(record)}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_record_fields(record: MemoryRecord) -> str:
+        text = f"{record.qq_name}（{record.qq_number}）:{record.event}"
+        if record.delete_condition:
+            text += f"（删除条件：{record.delete_condition}）"
+        return text
 
     @staticmethod
     def _build_system_item(prompt: str) -> dict[str, Any]:
@@ -592,6 +633,10 @@ class ShortTermMemoryPlugin(MaiBotPlugin):
         if len(normalized) > _MAX_EVENT_CHARS:
             return ""
         return normalized
+
+    @staticmethod
+    def _normalize_delete_condition(value: Any) -> str:
+        return _clean_text(value)
 
     @staticmethod
     def _now_iso() -> str:
