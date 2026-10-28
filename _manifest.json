@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "id": "com.codex.short-term-memory",
-  "version": "1.0.0",
+  "id": "github.tantan-yyds.short-term-memory",
+  "version": "1.0.1",
   "name": "短期记忆",
   "description": "全局短期记忆：在 Planner 与 Replyer 中注入 QQ 号、QQ 名和事情描述，并提供创建、修改、删除工具。",
   "author": {

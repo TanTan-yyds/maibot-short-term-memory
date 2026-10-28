@@ -5,7 +5,8 @@ from __future__ import annotations
 from maibot_sdk import PluginConfigBase
 from pydantic import Field
 
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.0.1"
+PLUGIN_CONFIG_VERSION = "1.0.0"
 
 
 class ShortTermMemorySectionConfig(PluginConfigBase):
@@ -57,7 +58,7 @@ class ShortTermMemorySectionConfig(PluginConfigBase):
         json_schema_extra={"label": "清理间隔(分钟)", "min": 1, "max": 1440},
     )
     config_version: str = Field(
-        default=PLUGIN_VERSION,
+        default=PLUGIN_CONFIG_VERSION,
         description="配置版本号（请勿手动修改）",
         json_schema_extra={"label": "配置版本", "disabled": True},
     )
